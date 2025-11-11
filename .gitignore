@@ -37,6 +37,10 @@ srv/_*.py
 *.pyc
 qtcreator-*
 *.user
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
 
 /planning/cfg
 /planning/docs
