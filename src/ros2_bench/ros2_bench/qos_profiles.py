@@ -1,30 +1,37 @@
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy, QoSHistoryPolicy
 
+#Reliable, no history on restart, store last 10 messages
 qos_revo = QoSProfile(depth=10)
 qos_revo.reliability = QoSReliabilityPolicy.RELIABLE
 qos_revo.durability = QoSDurabilityPolicy.VOLATILE
 qos_revo.history = QoSHistoryPolicy.KEEP_LAST
 
+#Fast, may drop packets, no history on restart, store last 10 messages
 qos_bevo = QoSProfile(depth=10)
 qos_bevo.reliability = QoSReliabilityPolicy.BEST_EFFORT
 qos_bevo.durability = QoSDurabilityPolicy.VOLATILE
 qos_bevo.history = QoSHistoryPolicy.KEEP_LAST
 
+#Reliable, keeps last 10 messages for late joiners
 qos_retr = QoSProfile(depth=10)
 qos_retr.reliability = QoSReliabilityPolicy.RELIABLE
 qos_retr.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
 qos_retr.history = QoSHistoryPolicy.KEEP_LAST
 
+#Fast, may drop packets, keeps last 10 messages for late joiners
 qos_betr = QoSProfile(depth=10)
 qos_betr.reliability = QoSReliabilityPolicy.BEST_EFFORT
 qos_betr.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
 qos_betr.history = QoSHistoryPolicy.KEEP_LAST
 
+#Reliable, keeps messages in history until given to subscribers but not after restart
 qos_reka = QoSProfile(depth=1000)
 qos_reka.reliability = QoSReliabilityPolicy.RELIABLE
 qos_reka.durability = QoSDurabilityPolicy.VOLATILE
 qos_reka.history = QoSHistoryPolicy.KEEP_ALL
 
+
+#Fast, may drop packets, keeps messages in history until given to subscribers but not after restart
 qos_beka = QoSProfile(depth=1000)
 qos_beka.reliability = QoSReliabilityPolicy.BEST_EFFORT
 qos_beka.durability = QoSDurabilityPolicy.VOLATILE
