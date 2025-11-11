@@ -1,5 +1,5 @@
 # ros2-benchmark
-Simple benchmark to test RTT ms on python packages using FastDDS
+Simple benchmark to test the latency between two python nodes using FastDDS
 
 
 ## Usage
