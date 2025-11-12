@@ -1,17 +1,23 @@
 import rclpy
 from rclpy.node import Node
 from custom_ping.msg import Ping
+from ros2_bench.qos_profiles import QOS_PROFILES, on_deadline_missed, on_message_lost
+from rclpy.event_handler import SubscriptionEventCallbacks
 import sys
 from ros2_bench.qos_profiles import QOS_PROFILES
 
 class ReceiverNode(Node):
     def __init__(self, qos):
         super().__init__('receiver_node')
+        event_callbacks = SubscriptionEventCallbacks(
+            message_lost=lambda event: on_message_lost(event, self.get_logger()),
+            deadline=lambda event: on_deadline_missed(event, self.get_logger())
+        )
 
         self.received = []
         sender_topic = 'sender_topic'
         receiver_topic = 'receiver_topic'
-        self.sub = self.create_subscription(Ping, sender_topic, self.on_ping_received, qos)
+        self.sub = self.create_subscription(Ping, sender_topic, self.on_ping_received, qos, event_callbacks=event_callbacks)
         self.pub = self.create_publisher(Ping, receiver_topic, qos)
         self.get_logger().info(f"Responder started. Listening on {sender_topic} and publishing on {receiver_topic}")
 

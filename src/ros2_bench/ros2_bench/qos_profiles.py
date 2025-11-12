@@ -1,5 +1,14 @@
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy, QoSHistoryPolicy
 
+
+#TO DO fix these
+def on_message_lost(event, logger):
+    logger.info(f"Message lost. Total count={event.total_count}")
+
+def on_deadline_missed(event, logger):
+    logger.info(f"Deadline missed. Total count={event.total_count}")
+
+
 #Reliable, no history on restart, store last 10 messages
 qos_revo = QoSProfile(depth=10)
 qos_revo.reliability = QoSReliabilityPolicy.RELIABLE

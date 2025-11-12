@@ -2,8 +2,11 @@ import rclpy
 from rclpy.node import Node
 import time, psutil, csv, os, datetime, sys
 from custom_ping.msg import Ping
-from ros2_bench.qos_profiles import QOS_PROFILES
+from ros2_bench.qos_profiles import QOS_PROFILES, on_deadline_missed, on_message_lost
+from rclpy.event_handler import SubscriptionEventCallbacks
 import os
+import numpy as np
+
 
 
 class SenderNode(Node):
@@ -11,23 +14,29 @@ class SenderNode(Node):
         super().__init__('sender_node')
         self.log_path = os.path.expanduser("~/ros2_logs")
         os.makedirs(self.log_path, exist_ok=True)
-
+        event_callbacks = SubscriptionEventCallbacks(
+            message_lost=lambda event: on_message_lost(event, self.get_logger()),
+            deadline=lambda event: on_deadline_missed(event, self.get_logger())
+        )
+        self.payload_size = 1000 #Simulate a large payload
         self.name = name
         self.pub = self.create_publisher(Ping,"sender_topic", qos_profile)
-        self.sub = self.create_subscription(Ping, "receiver_topic", self.on_receive, qos_profile)
+        self.sub = self.create_subscription(Ping, "receiver_topic", self.on_receive, qos_profile,event_callbacks=event_callbacks)
         self.seq = 0 # See how many messages are sent back
-        self.max_msgs = 1000 # Change how many times the message is sent
+        self.max_msgs = 100 # Change how many times the message is sent
         self.latencies = []
         self.received = set()
         self.cpu_usage = []
         self.proc = psutil.Process(os.getpid())
         self.start_time = time.time()
-        self.timer = self.create_timer(0.02, self.send_ping) # Change how fast the topic is sent
+        self.timer = self.create_timer(0.1, self.send_ping) # Change how fast the topic is sent
         self.curr_td = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.filename = os.path.join(self.log_path, f"results_{self.name}_{self.curr_td}")
         self.csv_file = open(f"{self.filename}.csv", "w", newline='')
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(['seq', 'rtt_ms', 'cpu_percent'])
+        self.payload = bytearray(np.random.randint(0,256,self.payload_size, dtype=np.uint8))
+
 
 
     def send_ping(self):
@@ -43,6 +52,7 @@ class SenderNode(Node):
         msg.stamp.nanosec = int((current_time - int(current_time)) * 1e9)
         cpu_percent = self.proc.cpu_percent(interval=None)
         self.cpu_usage.append(cpu_percent)
+        msg.payload = self.payload
         msg.cpu_percent = cpu_percent
         self.pub.publish(msg)
         self.seq += 1
