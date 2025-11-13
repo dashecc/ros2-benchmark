@@ -36,6 +36,9 @@ class SenderNode(Node):
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(['seq', 'rtt_ms', 'cpu_percent'])
         self.payload = bytearray(np.random.randint(0,256,self.payload_size, dtype=np.uint8))
+        self.out_of_order = 0
+        self.duplicates = 0
+        self.highest_seq_received = -1
 
 
 
@@ -64,9 +67,19 @@ class SenderNode(Node):
         rtt_ms = (recv_time - sent_time) * 1000
         self.latencies.append(rtt_ms)
 
+        if msg.seq in self.received:
+            self.duplicates += 1
+        # Needs optimizing, maybe not writing after receive but all at once when finished.
         #Ignore duplicates if network isn't stable
-        if msg.seq not in self.received:
+        elif msg.seq not in self.received:
             self.received.add(msg.seq)
+
+            #Track out of order messages from the highest seq received
+            if msg.seq < self.highest_seq_received:
+                self.out_of_order += 1
+
+            if msg.seq > self.highest_seq_received:
+                self.highest_seq_received = msg.seq
             cpu_to_log = self.cpu_usage[-1] if self.cpu_usage else 0
             self.csv_writer.writerow([f"{msg.seq}", f"{rtt_ms:.3f}", f"{cpu_to_log:.2f}"])
 
@@ -80,15 +93,13 @@ class SenderNode(Node):
         return jitter
 
     def finish(self):
-
-
         total = self.seq
         got = len(self.received)
         loss = total-got
         loss_rate = loss/total*100
         avg_rtt = sum(self.latencies)/len(self.latencies) if self.latencies else float('inf')
         avg_cpu = sum(self.cpu_usage)/len(self.cpu_usage) if self.cpu_usage else 0
-        summary = f"Benchmark summary for {self.name} \n Messages sent: {total} \n Messages received {got} \n Packet loss: {loss_rate:.2f} % \n Avg RTT: {avg_rtt} ms \n Avg CPU: {avg_cpu:.2f} % \n Duration: {time.time()-self.start_time:.2f} s \n Jitter: {self.calc_jitter()} \n"
+        summary = f"Benchmark summary for {self.name} \n Messages sent: {total} \n Messages received {got} \n Packet loss: {loss_rate:.2f} % \n Avg RTT: {avg_rtt} ms \n Avg CPU: {avg_cpu:.2f} % \n Duration: {time.time()-self.start_time:.2f} s \n Jitter: {self.calc_jitter()} \n Out of order packets: {self.out_of_order} \n Duplicate packets: {self.duplicates} \n"
         self.get_logger().info(summary)
         self.csv_file.close()
         with open(f"{self.filename}.txt", "w") as f:
