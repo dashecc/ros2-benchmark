@@ -1,7 +1,7 @@
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy, QoSHistoryPolicy
 
 
-#TO DO fix these
+#This works somewhat now.
 def on_message_lost(event, logger):
     logger.info(f"Message lost. Total count={event.total_count}")
 

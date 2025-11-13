@@ -23,8 +23,13 @@ class ReceiverNode(Node):
 
 
     def on_ping_received(self, msg):
-        #Bounce back the message once it has been received
-        self.pub.publish(msg)
+        #Initialize a reply with the same contents as the received message
+        reply = Ping()
+        reply.seq = msg.seq
+        reply.stamp = msg.stamp
+        reply.payload = msg.payload
+        reply.cpu_percent = msg.cpu_percent
+        self.pub.publish(reply)
         self.received.append(msg.seq)
         self.get_logger().debug(f"Bounced message with seq: {msg.seq}")
 

@@ -18,18 +18,18 @@ class SenderNode(Node):
             message_lost=lambda event: on_message_lost(event, self.get_logger()),
             deadline=lambda event: on_deadline_missed(event, self.get_logger())
         )
-        self.payload_size = 1000 #Simulate a large payload
+        self.payload_size = 500000 #Simulate a large payload
         self.name = name
         self.pub = self.create_publisher(Ping,"sender_topic", qos_profile)
         self.sub = self.create_subscription(Ping, "receiver_topic", self.on_receive, qos_profile,event_callbacks=event_callbacks)
         self.seq = 0 # See how many messages are sent back
-        self.max_msgs = 100 # Change how many times the message is sent
+        self.max_msgs = 500 # Change how many times the message is sent
         self.latencies = []
         self.received = set()
         self.cpu_usage = []
         self.proc = psutil.Process(os.getpid())
         self.start_time = time.time()
-        self.timer = self.create_timer(0.1, self.send_ping) # Change how fast the topic is sent
+        self.timer = self.create_timer(0.04, self.send_ping) # Change how fast the topic is sent
         self.curr_td = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.filename = os.path.join(self.log_path, f"results_{self.name}_{self.curr_td}")
         self.csv_file = open(f"{self.filename}.csv", "w", newline='')
@@ -47,7 +47,7 @@ class SenderNode(Node):
         
         msg = Ping()
         msg.seq = self.seq
-        current_time = time.time()
+        current_time = time.monotonic()
         msg.stamp.sec = int(current_time)
         msg.stamp.nanosec = int((current_time - int(current_time)) * 1e9)
         cpu_percent = self.proc.cpu_percent(interval=None)
@@ -58,13 +58,17 @@ class SenderNode(Node):
         self.seq += 1
 
     def on_receive(self, msg):
-        recv_time = time.time()
+        #Time.monotonic instead of time.time() so ntp desync doesn't happen
+        recv_time = time.monotonic()
         sent_time = msg.stamp.sec + msg.stamp.nanosec * 1e-9
         rtt_ms = (recv_time - sent_time) * 1000
         self.latencies.append(rtt_ms)
-        self.received.add(msg.seq)
-        cpu_to_log = self.cpu_usage[-1] if self.cpu_usage else 0
-        self.csv_writer.writerow([f"{msg.seq}", f"{rtt_ms:.3f}", f"{cpu_to_log:.2f}"])
+
+        #Ignore duplicates if network isn't stable
+        if msg.seq not in self.received:
+            self.received.add(msg.seq)
+            cpu_to_log = self.cpu_usage[-1] if self.cpu_usage else 0
+            self.csv_writer.writerow([f"{msg.seq}", f"{rtt_ms:.3f}", f"{cpu_to_log:.2f}"])
 
     def finish(self):
         total = self.seq
