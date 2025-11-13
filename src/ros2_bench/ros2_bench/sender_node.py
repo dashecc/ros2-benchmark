@@ -70,14 +70,25 @@ class SenderNode(Node):
             cpu_to_log = self.cpu_usage[-1] if self.cpu_usage else 0
             self.csv_writer.writerow([f"{msg.seq}", f"{rtt_ms:.3f}", f"{cpu_to_log:.2f}"])
 
+
+    def calc_jitter(self):
+        jitter = 0.0
+        if len(self.latencies) >= 2:
+            latencies = np.array(self.latencies)
+            succ_diff = np.diff(latencies)
+            jitter = np.mean(np.abs(succ_diff))
+        return jitter
+
     def finish(self):
+
+
         total = self.seq
         got = len(self.received)
         loss = total-got
         loss_rate = loss/total*100
         avg_rtt = sum(self.latencies)/len(self.latencies) if self.latencies else float('inf')
         avg_cpu = sum(self.cpu_usage)/len(self.cpu_usage) if self.cpu_usage else 0
-        summary = f"Benchmark summary for {self.name} \n Messages sent: {total} \n Messages received {got} \n Packet loss: {loss_rate:.2f} % \n Avg RTT: {avg_rtt} ms \n Avg CPU: {avg_cpu:.2f} % \n Duration: {time.time()-self.start_time:.2f} s \n \n"
+        summary = f"Benchmark summary for {self.name} \n Messages sent: {total} \n Messages received {got} \n Packet loss: {loss_rate:.2f} % \n Avg RTT: {avg_rtt} ms \n Avg CPU: {avg_cpu:.2f} % \n Duration: {time.time()-self.start_time:.2f} s \n Jitter: {self.calc_jitter()} \n"
         self.get_logger().info(summary)
         self.csv_file.close()
         with open(f"{self.filename}.txt", "w") as f:
