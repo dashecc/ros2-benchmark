@@ -6,6 +6,7 @@ from ros2_bench.qos_profiles import QOS_PROFILES, on_deadline_missed, on_message
 from rclpy.event_handler import SubscriptionEventCallbacks
 import os
 import numpy as np
+from rclpy.serialization import serialize_message
 
 
 
@@ -18,18 +19,28 @@ class SenderNode(Node):
             message_lost=lambda event: on_message_lost(event, self.get_logger()),
             deadline=lambda event: on_deadline_missed(event, self.get_logger())
         )
-        self.payload_size = 500000 #Simulate a large payload
+        self.payload_size = 100000 #Simulate a large payload
         self.name = name
         self.pub = self.create_publisher(Ping,"sender_topic", qos_profile)
         self.sub = self.create_subscription(Ping, "receiver_topic", self.on_receive, qos_profile,event_callbacks=event_callbacks)
         self.seq = 0 # See how many messages are sent back
-        self.max_msgs = 500 # Change how many times the message is sent
+        self.max_msgs = 100 # Change how many times the message is sent
+        self.timer = self.create_timer(0.02, self.send_ping) # Change how fast the topic is sent
+        
+        #Initializing values to try and exit safely
+        self.waiting = False
+        self.wait_start_time = None
+        self.last_reply_time = None
+        self.wait_timeout = 8.0
+        self.idle_timeout = 2.0
+        self.wait_checker = self.create_timer(0.5, self.check_completion)
+
+
         self.latencies = []
         self.received = set()
         self.cpu_usage = []
         self.proc = psutil.Process(os.getpid())
-        self.start_time = time.time()
-        self.timer = self.create_timer(0.04, self.send_ping) # Change how fast the topic is sent
+        self.start_time = time.monotonic()
         self.curr_td = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.filename = os.path.join(self.log_path, f"results_{self.name}_{self.curr_td}")
         self.csv_file = open(f"{self.filename}.csv", "w", newline='')
@@ -39,13 +50,22 @@ class SenderNode(Node):
         self.out_of_order = 0
         self.duplicates = 0
         self.highest_seq_received = -1
+        self.first_receive_time = None
+        self.received_bytes = 0
 
 
 
     def send_ping(self):
         #Stops the alloted amount of messages has been sent
         if self.seq >= self.max_msgs:
-            self.finish()
+            if not self.waiting:
+                self.get_logger().info("All messages sent - waiting for responses")
+                self.waiting = True
+                self.wait_start_time = time.monotonic()
+                try:
+                    self.timer.cancel()
+                except:
+                    pass
             return
         
         msg = Ping()
@@ -63,9 +83,19 @@ class SenderNode(Node):
     def on_receive(self, msg):
         #Time.monotonic instead of time.time() so ntp desync doesn't happen
         recv_time = time.monotonic()
+
+        if self.first_receive_time is None:
+            self.first_receive_time = recv_time
+
         sent_time = msg.stamp.sec + msg.stamp.nanosec * 1e-9
         rtt_ms = (recv_time - sent_time) * 1000
         self.latencies.append(rtt_ms)
+
+        #Get the time for the latest reply
+        self.last_reply_time = time.monotonic()
+
+        #Doesn't take into account DDS overhead
+        self.received_bytes += len(serialize_message(msg))
 
         if msg.seq in self.received:
             self.duplicates += 1
@@ -91,19 +121,51 @@ class SenderNode(Node):
             succ_diff = np.diff(latencies)
             jitter = np.mean(np.abs(succ_diff))
         return jitter
+    
+    def check_completion(self):
+        if not self.waiting:
+            return
+
+        curr = time.monotonic()
+
+
+        #Received everything
+        if len(self.received) >= self.max_msgs:
+            self.get_logger().info("All replies received - finishing..")
+            self.finish()
+            return
+        
+        #Wait if there are any messages still coming (not 100% it works)
+        if self.last_reply_time and (curr - self.last_reply_time) > self.idle_timeout:
+            self.get_logger().info("Idle timeout")
+            self.finish()
+            return
+        
+        #No replies in a certain amount of time so we're finishing
+        if (curr - self.wait_start_time) > self.wait_timeout:
+            self.get_logger().warn(f"Wait timeout {self.wait_timeout}s reached - finishing")
+            self.finish()
+            return
 
     def finish(self):
+        if self.last_reply_time:
+            elapsed = self.last_reply_time - self.start_time
+        else:
+            elapsed = time.monotonic() - self.start_time
         total = self.seq
         got = len(self.received)
         loss = total-got
         loss_rate = loss/total*100
         avg_rtt = sum(self.latencies)/len(self.latencies) if self.latencies else float('inf')
         avg_cpu = sum(self.cpu_usage)/len(self.cpu_usage) if self.cpu_usage else 0
-        summary = f"Benchmark summary for {self.name} \n Messages sent: {total} \n Messages received {got} \n Packet loss: {loss_rate:.2f} % \n Avg RTT: {avg_rtt} ms \n Avg CPU: {avg_cpu:.2f} % \n Duration: {time.time()-self.start_time:.2f} s \n Jitter: {self.calc_jitter()} \n Out of order packets: {self.out_of_order} \n Duplicate packets: {self.duplicates} \n"
+        throughput_mbps = (self.received_bytes * 8) / elapsed / 1e6 if elapsed > 0 else 0
+        summary = f"Benchmark summary for {self.name} \n Messages sent: {total} \n Messages received {got} \n Total data received: {self.received_bytes/1e6:.2f} MB \n Packet loss: {loss_rate:.2f} % \n Avg RTT: {avg_rtt:.3f} ms \n Avg CPU: {avg_cpu:.2f} % \n Duration: {elapsed:.2f} s \n Jitter: {self.calc_jitter():.3f} ms \n Throughput: {throughput_mbps:.3f} mbps \n Out of order packets: {self.out_of_order} \n Duplicate packets: {self.duplicates} \n"
         self.get_logger().info(summary)
         self.csv_file.close()
         with open(f"{self.filename}.txt", "w") as f:
             f.write(summary)
+        
+        self.destroy_node()
         rclpy.shutdown()
 
 
