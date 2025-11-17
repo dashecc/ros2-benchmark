@@ -74,6 +74,7 @@ ros2 launch launch/receiver.launch.py enclave:=/talker_listener/listener
 **Notes:**
 
 - The `enclave` argument corresponds to a subfolder in your SROS2 keystore.
+- The demo enclave created in ROS 2: Setting up security is used as a placeholder
 - Can use the same enclave for every node created
 
 ## Launch File Parameters
