@@ -10,25 +10,25 @@ def on_deadline_missed(event, logger):
 
 
 #Reliable, no history on restart, store last 10 messages
-qos_revo = QoSProfile(depth=130)
+qos_revo = QoSProfile(depth=100)
 qos_revo.reliability = QoSReliabilityPolicy.RELIABLE
 qos_revo.durability = QoSDurabilityPolicy.VOLATILE
 qos_revo.history = QoSHistoryPolicy.KEEP_LAST
 
 #Fast, may drop packets, no history on restart, store last 10 messages
-qos_bevo = QoSProfile(depth=10)
+qos_bevo = QoSProfile(depth=100)
 qos_bevo.reliability = QoSReliabilityPolicy.BEST_EFFORT
 qos_bevo.durability = QoSDurabilityPolicy.VOLATILE
 qos_bevo.history = QoSHistoryPolicy.KEEP_LAST
 
 #Reliable, keeps last 10 messages for late joiners
-qos_retr = QoSProfile(depth=10)
+qos_retr = QoSProfile(depth=100)
 qos_retr.reliability = QoSReliabilityPolicy.RELIABLE
 qos_retr.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
 qos_retr.history = QoSHistoryPolicy.KEEP_LAST
 
 #Fast, may drop packets, keeps last 10 messages for late joiners
-qos_betr = QoSProfile(depth=10)
+qos_betr = QoSProfile(depth=100)
 qos_betr.reliability = QoSReliabilityPolicy.BEST_EFFORT
 qos_betr.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
 qos_betr.history = QoSHistoryPolicy.KEEP_LAST

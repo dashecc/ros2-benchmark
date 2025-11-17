@@ -7,18 +7,28 @@ import sys
 from ros2_bench.qos_profiles import QOS_PROFILES
 
 class ReceiverNode(Node):
-    def __init__(self, qos):
+    def __init__(self):
         super().__init__('receiver_node')
         event_callbacks = SubscriptionEventCallbacks(
             message_lost=lambda event: on_message_lost(event, self.get_logger()),
             deadline=lambda event: on_deadline_missed(event, self.get_logger())
         )
 
+        # Using a parameter is infinitely better than using a sys arg, can probably be condensed a little
+        self.declare_parameter('qos_profile', 'reliable_volatile')
+        qos_name = self.get_parameter('qos_profile')
+        self.qos_name = qos_name.get_parameter_value().string_value
+        qos_profile = QOS_PROFILES[self.qos_name]
+
+        self.declare_parameter('topic_int',1)
+        topic_int = self.get_parameter('topic_int')
+        self.topic_int = topic_int.get_parameter_value().integer_value
+
         self.received = []
-        sender_topic = 'sender_topic'
-        receiver_topic = 'receiver_topic'
-        self.sub = self.create_subscription(Ping, sender_topic, self.on_ping_received, qos, event_callbacks=event_callbacks)
-        self.pub = self.create_publisher(Ping, receiver_topic, qos)
+        sender_topic = f'sender_topic_{self.topic_int}'
+        receiver_topic = f'receiver_topic_{self.topic_int}'
+        self.sub = self.create_subscription(Ping, sender_topic, self.on_ping_received, qos_profile, event_callbacks=event_callbacks)
+        self.pub = self.create_publisher(Ping, receiver_topic, qos_profile)
         self.get_logger().info(f"Responder started. Listening on {sender_topic} and publishing on {receiver_topic}")
 
 
@@ -36,17 +46,7 @@ class ReceiverNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-
-    if len(sys.argv) < 2:
-        print("ros2 run ros2_bench <qos_mode> for example best_effort_volatile")
-    
-    name = sys.argv[1]
-
-    #Look for the name given in the QOS_PROFILES dictionary and set that as the qos profile for the run
-    qos = QOS_PROFILES[name]
-
-
-    responder = ReceiverNode(qos)
+    responder = ReceiverNode()
     try:
         rclpy.spin(responder)
     except:
