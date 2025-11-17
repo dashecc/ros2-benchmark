@@ -39,6 +39,7 @@ class ReceiverNode(Node):
         reply.stamp = msg.stamp
         reply.payload = msg.payload
         reply.cpu_percent = msg.cpu_percent
+        reply.message = msg.message
         self.pub.publish(reply)
         self.received.append(msg.seq)
         self.get_logger().debug(f"Bounced message with seq: {msg.seq}")

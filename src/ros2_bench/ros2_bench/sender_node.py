@@ -29,7 +29,7 @@ class SenderNode(Node):
         topic_int = self.get_parameter('topic_int')
         self.topic_int = topic_int.get_parameter_value().integer_value
 
-        self.payload_size = 5000 #In bytes
+        self.payload_size = 100 #In bytes
         self.pub = self.create_publisher(Ping,f"sender_topic_{self.topic_int}", qos_profile)
         self.sub = self.create_subscription(Ping, f"receiver_topic_{self.topic_int}", self.on_receive, qos_profile,event_callbacks=event_callbacks)
         self.seq = 0 # See how many messages are sent back
@@ -85,6 +85,7 @@ class SenderNode(Node):
         cpu_percent = self.proc.cpu_percent(interval=None)
         self.cpu_usage.append(cpu_percent)
         msg.payload = self.payload
+        msg.message = 'If you see this, its not encrypted'
         msg.cpu_percent = cpu_percent
         self.pub.publish(msg)
         self.seq += 1
@@ -106,12 +107,15 @@ class SenderNode(Node):
         #Doesn't take into account DDS overhead
         self.received_bytes += len(serialize_message(msg))
 
-        if msg.seq in self.received:
+        #Track packets seperately for each topic_int
+        key = (self.topic_int, msg.seq)
+
+        if key in self.received:
             self.duplicates += 1
         # Needs optimizing, maybe not writing after receive but all at once when finished.
         #Ignore duplicates if network isn't stable
-        elif msg.seq not in self.received:
-            self.received.add(msg.seq)
+        else:
+            self.received.add(key)
 
             #Track out of order messages from the highest seq received
             if msg.seq < self.highest_seq_received:
